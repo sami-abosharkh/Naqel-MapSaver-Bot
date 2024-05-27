@@ -8,9 +8,6 @@ from selenium.webdriver.common.actions.pointer_input import PointerInput
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-import os
-
-os.system('cls' if os.name == 'nt' else 'clear')
 
 capabilities = dict(
     platformName='Android',
@@ -28,25 +25,12 @@ capabilities = dict(
 appium_server_url = 'http://localhost:4723'
 driver = webdriver.Remote(appium_server_url, options=UiAutomator2Options().load_capabilities(capabilities))
 wait = WebDriverWait(driver, 10)
-totalShipments  = 51
-lastShipment    = 36
-scrollIndex     = 4
+totalShipments  = 0
+lastShipment    = 0
+scrollIndex     = lastShipment + 4
 
 noLocation  = 0
 outsideZone = 0
-
-print("||||||||||||||||||||||||||||||||||||||||||||||||||")
-
-def ConditionSetup():
-    
-    if driver.current_activity != ".Activity.MainPage.MainPageActivity":
-        print("Condition not met. Exiting.\n", driver.current_activity)
-        driver.quit()  # Exit the program
-        sys.exit()
-    else:
-        global totalShipments
-        totalShipments = int(float(driver.find_element(by=AppiumBy.ID, value="com.naqelexpress.naqelpointer:id/ofd").text))
-        driver.find_element(by=AppiumBy.XPATH, value="(//android.widget.ImageView[@resource-id=\"com.naqelexpress.naqelpointer:id/icons\"])[2]").click()
 
 def process():
 
@@ -57,6 +41,7 @@ def process():
     
     while lastShipment <= totalShipments:
         CheckList()
+    
     print("_________________________")
     print("No Location: ", noLocation)
     print("Outsize Zone: ", outsideZone)
@@ -103,42 +88,50 @@ def CheckList():
             noLocation+=1
     
     # Scrolling Down
-    if lastShipment == scrollIndex + 1:
+    if lastShipment == scrollIndex:
         for a in range(4):
-            ScrollDown()
+            ListScroll()
             scrollIndex+=1
 
 def ShipmentsDetails(aNum):
 
     global outsideZone
+    global lastShipment
+
+    lastShipment+=1
 
     #Shipments Details
     shipmentNum     = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtWaybilll'))).text
     shipperName     = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtShipperName'))).text
     shipmentCOD     = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/tv_total_amount_body'))).text
     shipmentWeight  = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtweight'))).text
-    # phoneNum        = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtPhoneNo'))).text
-    # mobileNum       = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtMobileNo'))).text
+    phoneNum        = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtPhoneNo'))).text
+    mobileNum       = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtMobileNo'))).text
     shipmentAddress = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtaddress'))).text
+    # shipmentPices     = wait.until(EC.visibility_of_element_located((By.ID, 'com.naqelexpress.naqelpointer:id/txtpiececount'))).text
+    
+    amountPhone = "1"
 
+    if (phoneNum != mobileNum): amountPhone = "2"
+    
     # if (phoneNum == mobileNum): customerNumber = phoneNum
     # else: customerNumber = phoneNum + "-" + mobileNum
 
-    details = aNum + " - " + shipperName + " [W:" + shipmentWeight + " COD:" + shipmentCOD + "]\n-> " + shipmentAddress
+    details = aNum + " - " + shipmentNum + " [" + shipmentWeight + "/"+ amountPhone + "] " + shipperName + "\n-> " + shipmentAddress
 
-    shipmentPin = len(driver.find_elements(by=AppiumBy.XPATH, value="(//android.view.View[@content-desc='" + shipmentNum + ". '])"))
-        
-    # if shipmentPin == 0:
-    #     driver.find_element(by=AppiumBy.ACCESSIBILITY_ID, value="Zoom out").click()
-
-    if shipmentPin == 0:
-        print(lastShipment, "(Outside Zone)")
-        ExitDetailsPage()
-        outsideZone+=1
-        return
-    else:
-        driver.find_element(by=AppiumBy.XPATH, value="(//android.view.View[@content-desc='" + shipmentNum + ". '])").click()
-    
+    for a in range(3):
+        shipmentPin = len(driver.find_elements(by=AppiumBy.XPATH, value="(//android.view.View[@content-desc='" + shipmentNum + ". '])"))
+        if shipmentPin == 0:
+            MapScroll()
+            # driver.find_element(by=AppiumBy.ACCESSIBILITY_ID, value="Zoom out").click()
+            if a == 1:
+                currentShipment = lastShipment - 1
+                print(currentShipment, "(Outside Zone)")
+                ExitDetailsPage()
+                outsideZone+=1
+                return
+                
+    wait.until(EC.visibility_of_element_located((By.XPATH, "(//android.view.View[@content-desc='" + shipmentNum + ". '])"))).click()
     wait.until(EC.visibility_of_element_located((By.XPATH, "//android.widget.ImageView[@content-desc=\"Open in Google Maps\"]"))).click()
     MapSave(details, float(shipmentCOD))
 
@@ -161,8 +154,6 @@ def MapSave(aDetails, aCOD):
     ExitDetailsPage()
 
 def ExitDetailsPage():
-    
-    global lastShipment
 
     while True:
         if len(driver.find_elements(by=AppiumBy.ID, value="android:id/parentPanel")) > 0:
@@ -170,17 +161,23 @@ def ExitDetailsPage():
             break
         else:
             driver.back()
-    
-    lastShipment+=1
 
-def ScrollDown(): 
+def ListScroll(): 
     actions = ActionChains(driver)
-    actions.w3c_actions = ActionBuilder(driver, mouse=PointerInput(interaction.POINTER_TOUCH, "touch"))
+    actions.w3c_actions = ActionBuilder(driver, mouse=PointerInput(interaction.POINTER_TOUCH, "List"))
     actions.w3c_actions.pointer_action.move_to_location(500, 1550)
     actions.w3c_actions.pointer_action.pointer_down()
     actions.w3c_actions.pointer_action.move_to_location(500, 1000)
     actions.perform()
 
+def MapScroll(): 
+    actions = ActionChains(driver)
+    actions.w3c_actions = ActionBuilder(driver, mouse=PointerInput(interaction.POINTER_TOUCH, "Map"))
+    actions.w3c_actions.pointer_action.move_to_location(500, 1800)
+    actions.w3c_actions.pointer_action.pointer_down()
+    actions.w3c_actions.pointer_action.move_to_location(500, 2000)
+    actions.perform()
+
 ##################################################################################
-# ConditionSetup() #Get number of shipments
+
 process()
